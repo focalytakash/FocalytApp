@@ -75,7 +75,7 @@ yarn-error.log
 !.yarn/versions
 
 
-/FocalytApp/node_modules
-/FocalytApp/.env
-/FocalytApp/my-release-key.keystore
-/FocalytApp/android/app/my-upload-key.keystore
+/node_modules
+/.env
+/my-release-key.keystore
+/android/app/my-upload-key.keystore

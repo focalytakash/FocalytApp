@@ -79,3 +79,4 @@ yarn-error.log
 /.env
 /my-release-key.keystore
 /android/app/my-upload-key.keystore
+/android/local.properties

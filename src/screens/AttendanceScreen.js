@@ -9,7 +9,7 @@ import {
   FlatList,
   Modal,
 } from 'react-native';
-import ToggleMenu from '../components/ToggleMenu';
+
 
 const { width } = Dimensions.get('window');
 
@@ -264,9 +264,6 @@ const AttendanceScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      {/* Toggle Menu */}
-      <ToggleMenu navigation={navigation} />
-      
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>📊 Attendance History</Text>

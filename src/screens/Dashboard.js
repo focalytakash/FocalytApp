@@ -9,7 +9,7 @@ import {
   ScrollView,
   Dimensions,
 } from 'react-native';
-import ToggleMenu from '../components/ToggleMenu';
+
 
 const { width } = Dimensions.get('window');
 
@@ -133,9 +133,6 @@ const Dashboard = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      {/* Toggle Menu */}
-      <ToggleMenu navigation={navigation} />
-      
       {/* Floating Background Elements */}
       <View style={[styles.floatingCircle, styles.circle1]} />
       <View style={[styles.floatingCircle, styles.circle2]} />

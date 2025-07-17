@@ -5,33 +5,46 @@ import { Text, TouchableOpacity, Alert, View } from 'react-native';
 // Import your screens
 import StackNavigator from './StackNavigator';
 import AttendanceScreen from '../screens/AttendanceScreen';
-import SettingsModal from '../screens/SettingsModal';
+import SidePanel from '../components/SidePanel';
 
 const Tab = createBottomTabNavigator();
 
 // Custom Settings Tab Component
 const SettingsTab = ({ navigation }) => {
-  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showSidePanel, setShowSidePanel] = useState(true); // Start with panel open
 
-  // Auto-open settings modal when tab is pressed
+  // Reset panel to visible every time this component mounts/focuses
   useEffect(() => {
-    setShowSettingsModal(true);
+    setShowSidePanel(true);
   }, []);
 
-  const handleCloseModal = () => {
-    setShowSettingsModal(false);
+  // Listen for tab focus to reset panel
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      setShowSidePanel(true);
+    });
+
+    return unsubscribe;
+  }, [navigation]);
+
+  const handleClosePanel = () => {
+    setShowSidePanel(false);
     // Navigate back to Dashboard tab
     navigation.navigate('Dashboard');
   };
 
   return (
     <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
-      {/* Settings Modal */}
-      <SettingsModal
-        visible={showSettingsModal}
-        onClose={handleCloseModal}
+      <SidePanel
+        visible={showSidePanel}
+        onClose={handleClosePanel}
         navigation={navigation}
       />
+      
+      {/* Debug info */}
+      <View style={{ position: 'absolute', top: 50, left: 20, backgroundColor: 'rgba(0,0,0,0.8)', padding: 10, borderRadius: 5 }}>
+        <Text style={{ color: 'white', fontSize: 12 }}>SidePanel: {showSidePanel ? 'Visible' : 'Hidden'}</Text>
+      </View>
     </View>
   );
 };

@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   Modal,
   ScrollView,
-  Image,
   Alert,
 } from 'react-native';
 
@@ -14,17 +13,16 @@ const SidePanel = ({ visible, onClose, navigation }) => {
   const menuItems = [
     {
       id: 'profile',
-      title: '👤 Employee Details/Profile',
+      title: 'Employee Details/Profile',
       icon: '👤',
       action: () => {
         onClose();
-        // Navigate to profile screen
-        Alert.alert('Profile', 'Profile screen will be implemented');
+        navigation.navigate('EmployeeProfile');
       },
     },
     {
       id: 'password',
-      title: '🔑 Change Password',
+      title: 'Change Password',
       icon: '🔑',
       action: () => {
         onClose();
@@ -33,7 +31,7 @@ const SidePanel = ({ visible, onClose, navigation }) => {
     },
     {
       id: 'about',
-      title: 'ℹ️ About Us',
+      title: 'About Us',
       icon: 'ℹ️',
       action: () => {
         onClose();
@@ -42,7 +40,7 @@ const SidePanel = ({ visible, onClose, navigation }) => {
     },
     {
       id: 'terms',
-      title: '📋 Terms & Conditions',
+      title: 'Terms & Conditions',
       icon: '📋',
       action: () => {
         onClose();
@@ -51,7 +49,7 @@ const SidePanel = ({ visible, onClose, navigation }) => {
     },
     {
       id: 'privacy',
-      title: '🔒 Privacy Policy',
+      title: 'Privacy Policy',
       icon: '🔒',
       action: () => {
         onClose();
@@ -60,7 +58,7 @@ const SidePanel = ({ visible, onClose, navigation }) => {
     },
     {
       id: 'salary',
-      title: '💰 Salary Statement',
+      title: 'Salary Statement',
       icon: '💰',
       action: () => {
         onClose();
@@ -102,10 +100,9 @@ const SidePanel = ({ visible, onClose, navigation }) => {
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.headerContent}>
-              <Image
-                source={require('../assets/images/logo/focalyt_new_logo.png')}
-                style={styles.logo}
-              />
+              <View style={styles.logoPlaceholder}>
+                <Text style={styles.logoText}>F</Text>
+              </View>
               <Text style={styles.appName}>Focalyt</Text>
               <Text style={styles.appSubtitle}>Settings</Text>
             </View>
@@ -197,10 +194,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
   },
-  logo: {
+  logoPlaceholder: {
     width: 50,
     height: 50,
-    resizeMode: 'contain',
+    borderRadius: 25,
+    backgroundColor: '#3B82F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  logoText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
   },
   appName: {
     fontSize: 18,

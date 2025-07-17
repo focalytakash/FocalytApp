@@ -1,12 +1,40 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Text, TouchableOpacity, Alert } from 'react-native';
+import { Text, TouchableOpacity, Alert, View } from 'react-native';
 
 // Import your screens
-import Dashboard from '../screens/Dashboard';
+import StackNavigator from './StackNavigator';
 import AttendanceScreen from '../screens/AttendanceScreen';
+import SettingsModal from '../screens/SettingsModal';
 
 const Tab = createBottomTabNavigator();
+
+// Custom Settings Tab Component
+const SettingsTab = ({ navigation }) => {
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+
+  // Auto-open settings modal when tab is pressed
+  useEffect(() => {
+    setShowSettingsModal(true);
+  }, []);
+
+  const handleCloseModal = () => {
+    setShowSettingsModal(false);
+    // Navigate back to Dashboard tab
+    navigation.navigate('Dashboard');
+  };
+
+  return (
+    <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
+      {/* Settings Modal */}
+      <SettingsModal
+        visible={showSettingsModal}
+        onClose={handleCloseModal}
+        navigation={navigation}
+      />
+    </View>
+  );
+};
 
 // Custom Logout Tab Component
 const LogoutTab = ({ navigation }) => {
@@ -71,7 +99,7 @@ const BottomTabNavigator = () => {
     >
       <Tab.Screen
         name="Dashboard"
-        component={Dashboard}
+        component={StackNavigator}
         options={{
           tabBarIcon: ({ color, size }) => (
             <Text style={{ fontSize: 24, color }}>🏠</Text>
@@ -88,6 +116,17 @@ const BottomTabNavigator = () => {
             <Text style={{ fontSize: 24, color }}>📊</Text>
           ),
           tabBarLabel: 'Attendance',
+        }}
+      />
+      
+      <Tab.Screen
+        name="Settings"
+        component={SettingsTab}
+        options={{
+          tabBarIcon: ({ color, size }) => (
+            <Text style={{ fontSize: 24, color }}>⚙️</Text>
+          ),
+          tabBarLabel: 'Settings',
         }}
       />
       

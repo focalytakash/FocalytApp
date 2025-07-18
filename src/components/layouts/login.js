@@ -27,7 +27,6 @@ const LoginScreen = ({ navigation }) => {
     const [showUserDetail, setShowUserDetail] = useState(false);
     const [newUser, setNewUser] = useState('false');
     const [user, setUser] = useState(null);
-    const backendUrl = 'https://focalyt.com/api';
 
     console.log('showOtpInput', showOtpInput);
 
@@ -37,7 +36,6 @@ const LoginScreen = ({ navigation }) => {
         }
 
         console.log('🔁 handleSendOtp called');
-        console.log('backendUrl', backendUrl);
         console.log(' mobile', mobile);
         if (mobile.length !== 10) {
             Alert.alert("Please enter valid mobile number");
@@ -46,7 +44,7 @@ const LoginScreen = ({ navigation }) => {
         console.log("✅ Valid number, calling API...");
 
         try {
-            const res = await axios.post(`${backendUrl}/api/sendCandidateOtp`, { mobile });
+            const res = await axios.post('http://10.0.2.2:8080/api/sendCandidateOtp', { mobile });
             if (res.data.status == true && res.data.newUser == false) {
                 console.log("✅ OTP sent:", res.data);
                 setShowOtpInput(true); // OTP field show kar do
@@ -76,18 +74,18 @@ const LoginScreen = ({ navigation }) => {
 
             if (newUser == false) {
                 console.log("mobile: otp", mobile, otp);
-                const res = await axios.post(`${backendUrl}/api/verifyOtp`, {
+                const res = await axios.post('http://10.0.2.2:8080/api/verifyOtp', {
                     mobile,
                     otp
                 });
                 console.log("res", res.data);
                 if (res.data.status) {
-                    const loginRes = await axios.post(`${backendUrl}/api/otpCandidateLogin`, { mobile: mobile });
+                    const loginRes = await axios.post(`http://10.0.2.2:8080/api/otpCandidateLogin`, { mobile: mobile });
                     console.log("loginRes", loginRes.data);
                     const token = loginRes.data.token;
                     const verificationBody = { mobile: mobile, verified: true }
                     const headers = { headers: { 'x-auth': token } };
-                    const verifyRes = await axios.post(`${backendUrl}/candidate/verification`, verificationBody, headers);
+                    const verifyRes = await axios.post(`http://10.0.2.2:8080/candidate/verification`, verificationBody, headers);
                     console.log("verifyRes", verifyRes.data);
                     if (verifyRes.data.status) {
                         AsyncStorage.setItem('candidate', loginRes.data.name);

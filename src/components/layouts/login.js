@@ -95,7 +95,7 @@ const LoginScreen = ({ navigation }) => {
                         AsyncStorage.setItem('user', JSON.stringify(loginRes.data.user));
 
 
-                            navigation.navigate('Dashboard');
+                            navigation.navigate('MainApp');
 
                     } else {
                         setErrorMessage('Login failed after OTP verification');

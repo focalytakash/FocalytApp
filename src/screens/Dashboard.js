@@ -9,7 +9,10 @@ import {
   ScrollView,
   Dimensions,
 } from 'react-native';
-import ToggleMenu from '../components/ToggleMenu';
+import { getLocationWithPermission, formatLocation } from '../utils/locationService';
+import GPSStatus from '../components/GPSStatus';
+import SettingsModal from './SettingsModal';
+
 
 const { width } = Dimensions.get('window');
 
@@ -20,6 +23,8 @@ const Dashboard = ({ navigation }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [workingHours, setWorkingHours] = useState('00:00:00');
   const [loading, setLoading] = useState(false);
+  const [currentLocation, setCurrentLocation] = useState(null);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
 
   // User Information
   const [userInfo] = useState({
@@ -60,6 +65,25 @@ const Dashboard = ({ navigation }) => {
   const handlePunchIn = async () => {
     try {
       setLoading(true);
+      
+      // Get current location - GPS REQUIRED 
+      const location = await getLocationWithPermission();
+      
+      // Check if location is available
+      if (!location) {
+        setLoading(false);
+        Alert.alert(
+          '📍 GPS Required',
+          'Please enable GPS/Location services to punch in. Location is mandatory for attendance tracking.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Enable GPS', onPress: () => handlePunchIn() }
+          ]
+        );
+        return; // Punch in nahi hoga without GPS
+      }
+      
+      setCurrentLocation(location);
       const now = new Date();
       
       await new Promise(resolve => setTimeout(resolve, 800));
@@ -71,7 +95,7 @@ const Dashboard = ({ navigation }) => {
       
       Alert.alert(
         '🎉 Welcome Back!',
-        `✅ Punch In: ${now.toLocaleTimeString()}\n📍 Location: ${userInfo.location}\n\nHave a productive day ahead!`,
+        `✅ Punch In: ${now.toLocaleTimeString()}\n📍 Location: ${formatLocation(location)}\n\nHave a productive day ahead!`,
         [{ text: 'Let\'s Go!', style: 'default' }]
       );
     } catch (error) {
@@ -84,6 +108,25 @@ const Dashboard = ({ navigation }) => {
   const handlePunchOut = async () => {
     try {
       setLoading(true);
+      
+      // Get current location for punch out - GPS REQUIRED
+      const location = await getLocationWithPermission();
+      
+      // Check if location is available
+      if (!location) {
+        setLoading(false);
+        Alert.alert(
+          '📍 GPS Required',
+          'Please enable GPS/Location services to punch out. Location is mandatory for attendance tracking.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Enable GPS', onPress: () => handlePunchOut() }
+          ]
+        );
+        return; // Punch out nahi hoga without GPS
+      }
+      
+      setCurrentLocation(location);
       const now = new Date();
       
       await new Promise(resolve => setTimeout(resolve, 800));
@@ -99,7 +142,7 @@ const Dashboard = ({ navigation }) => {
         
         Alert.alert(
           '🌟 Great Work Today!',
-          `✅ Punch Out: ${now.toLocaleTimeString()}\n⏱️ Total Time: ${hours}h ${minutes}m\n📍 Location: ${userInfo.location}\n\nSee you tomorrow!`,
+          `✅ Punch Out: ${now.toLocaleTimeString()}\n⏱️ Total Time: ${hours}h ${minutes}m\n📍 Location: ${formatLocation(location)}\n\nSee you tomorrow!`,
           [{ text: 'Thanks!', style: 'default' }]
         );
       }
@@ -133,9 +176,6 @@ const Dashboard = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      {/* Toggle Menu */}
-      <ToggleMenu navigation={navigation} />
-      
       {/* Floating Background Elements */}
       <View style={[styles.floatingCircle, styles.circle1]} />
       <View style={[styles.floatingCircle, styles.circle2]} />
@@ -145,10 +185,15 @@ const Dashboard = ({ navigation }) => {
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerTop}>
-            <View>
-              <Text style={styles.greeting}>Good Morning! ☀️</Text>
-              <Text style={styles.userName}>{userInfo.name}</Text>
-              <Text style={styles.designation}>{userInfo.designation}</Text>
+            <View style={styles.headerLeft}>
+              <View style={styles.menuButton}>
+                <Text style={styles.menuIcon}>👋</Text>
+              </View>
+              <View>
+                <Text style={styles.greeting}>Good Morning! ☀️</Text>
+                <Text style={styles.userName}>{userInfo.name}</Text>
+                <Text style={styles.designation}>{userInfo.designation}</Text>
+              </View>
             </View>
             <View style={styles.timeDisplay}>
               <Text style={styles.currentTime}>{formatTime(currentTime)}</Text>
@@ -198,6 +243,14 @@ const Dashboard = ({ navigation }) => {
         <View style={styles.profileCard}>
           <View style={styles.profileHeader}>
             <Text style={styles.sectionTitle}>👤 Employee Profile</Text>
+            <GPSStatus 
+              hasLocation={!!currentLocation}
+              onRefresh={async () => {
+                const location = await getLocationWithPermission();
+                setCurrentLocation(location);
+              }}
+              showDetails={true}
+            />
           </View>
           <View style={styles.profileGrid}>
             <View style={styles.profileItem}>
@@ -221,13 +274,21 @@ const Dashboard = ({ navigation }) => {
                 <Text style={styles.profileValue}>{userInfo.email}</Text>
               </View>
             </View>
-            <View style={styles.profileItem}>
+            <TouchableOpacity 
+              style={styles.profileItem}
+              onPress={async () => {
+                const location = await getLocationWithPermission();
+                setCurrentLocation(location);
+              }}
+            >
               <Text style={styles.profileIcon}>📍</Text>
               <View>
-                <Text style={styles.profileLabel}>Location</Text>
-                <Text style={styles.profileValue}>{userInfo.location}</Text>
+                <Text style={styles.profileLabel}>Current Location</Text>
+                <Text style={styles.profileValue}>
+                  {currentLocation ? formatLocation(currentLocation) : 'Tap to get location'}
+                </Text>
               </View>
-            </View>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -285,12 +346,22 @@ const Dashboard = ({ navigation }) => {
 
         {/* Action Button */}
         <View style={styles.actionSection}>
+          {/* GPS Status Warning */}
+          {!currentLocation && (
+            <View style={styles.gpsWarning}>
+              <Text style={styles.gpsWarningText}>
+                ⚠️ GPS required for attendance tracking
+              </Text>
+            </View>
+          )}
+          
           <TouchableOpacity
             style={[styles.actionButton, { 
               backgroundColor: isCheckedIn ? '#EF4444' : '#10B981',
+              opacity: !currentLocation && !isCheckedIn ? 0.6 : 1,
             }]}
             onPress={isCheckedIn ? handlePunchOut : handlePunchIn}
-            disabled={loading}
+            disabled={loading || (!currentLocation && !isCheckedIn)}
           >
             {loading ? (
               <View style={styles.loadingContainer}>
@@ -319,6 +390,8 @@ const Dashboard = ({ navigation }) => {
           <Text style={styles.footerSubText}>Empowering productivity, one check-in at a time</Text>
         </View>
       </ScrollView>
+
+
     </View>
   );
 };
@@ -366,6 +439,29 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  menuButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  menuIcon: {
+    fontSize: 18,
+    color: '#1E293B',
+    fontWeight: '600',
   },
   greeting: {
     fontSize: 16,
@@ -489,6 +585,20 @@ const styles = StyleSheet.create({
   },
   profileHeader: {
     marginBottom: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  locationStatus: {
+    backgroundColor: '#D1FAE5',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  locationStatusText: {
+    fontSize: 12,
+    color: '#065F46',
+    fontWeight: '600',
   },
   sectionTitle: {
     fontSize: 18,
@@ -620,6 +730,21 @@ const styles = StyleSheet.create({
   actionSection: {
     paddingHorizontal: 20,
     marginBottom: 20,
+  },
+  gpsWarning: {
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  gpsWarningText: {
+    fontSize: 14,
+    color: '#92400E',
+    fontWeight: '600',
+    textAlign: 'center',
   },
   actionButton: {
     borderRadius: 25,

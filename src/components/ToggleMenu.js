@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Dimensions,
   Animated,
+  ScrollView,
 } from 'react-native';
 
 const { width, height } = Dimensions.get('window');
@@ -82,39 +83,42 @@ const ToggleMenu = ({ navigation }) => {
                 <Text style={styles.menuSubtitle}>Employee Portal</Text>
               </View>
 
-              {/* Menu Items */}
-              <View style={styles.menuItems}>
-                {menuItems.map((item) => (
+              {/* Scrollable Menu Content */}
+              <ScrollView style={styles.menuScrollView} showsVerticalScrollIndicator={false}>
+                {/* Menu Items */}
+                <View style={styles.menuItems}>
+                  {menuItems.map((item) => (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={styles.menuItem}
+                      onPress={() => {
+                        console.log('🔍 Menu item clicked:', item.title, item.screen);
+                        navigateToScreen(item.screen);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.menuIcon}>{item.icon}</Text>
+                      <Text style={styles.menuText}>{item.title}</Text>
+                      <Text style={styles.menuArrow}>›</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                
+                {/* Logout Button - Moved up inside ScrollView */}
+                <View style={styles.logoutSection}>
                   <TouchableOpacity
-                    key={item.id}
-                    style={styles.menuItem}
+                    style={styles.logoutButton}
                     onPress={() => {
-                      console.log('🔍 Menu item clicked:', item.title, item.screen);
-                      navigateToScreen(item.screen);
+                      hideMenu();
+                      navigation.navigate('Login');
                     }}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.menuIcon}>{item.icon}</Text>
-                    <Text style={styles.menuText}>{item.title}</Text>
-                    <Text style={styles.menuArrow}>›</Text>
+                    <Text style={styles.logoutIcon}>🚪</Text>
+                    <Text style={styles.logoutText}>Logout</Text>
                   </TouchableOpacity>
-                ))}
-              </View>
-
-              {/* Menu Footer */}
-              <View style={styles.menuFooter}>
-                <TouchableOpacity
-                  style={styles.logoutButton}
-                  onPress={() => {
-                    hideMenu();
-                    navigation.navigate('Login');
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.logoutIcon}>🚪</Text>
-                  <Text style={styles.logoutText}>Logout</Text>
-                </TouchableOpacity>
-              </View>
+                </View>
+              </ScrollView>
             </View>
           </TouchableOpacity>
         </Animated.View>
@@ -165,6 +169,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 10,
     elevation: 10,
+    justifyContent: 'space-between', // Add this
   },
   menuHeader: {
     padding: 20,
@@ -181,9 +186,12 @@ const styles = StyleSheet.create({
     color: '#E0E7FF',
     marginTop: 4,
   },
-  menuItems: {
+  menuScrollView: {
     flex: 1,
+  },
+  menuItems: {
     paddingTop: 20,
+    paddingBottom: 20,
   },
   menuItem: {
     flexDirection: 'row',
@@ -209,15 +217,24 @@ const styles = StyleSheet.create({
     color: '#64748B',
     fontWeight: 'bold',
   },
-  menuFooter: {
+  logoutSection: {
     padding: 20,
+    paddingTop: 20,
+    paddingBottom: 20,
+    marginTop: 20,
     borderTopWidth: 1,
     borderTopColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
   },
   logoutButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FECACA',
   },
   logoutIcon: {
     fontSize: 18,

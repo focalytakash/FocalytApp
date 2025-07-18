@@ -9,7 +9,8 @@ import {
   FlatList,
   Modal,
 } from 'react-native';
-import ToggleMenu from '../components/ToggleMenu';
+
+
 
 const { width } = Dimensions.get('window');
 
@@ -19,6 +20,7 @@ const AttendanceScreen = ({ navigation }) => {
   const [viewMode, setViewMode] = useState('calendar'); // calendar, list, stats
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
+
 
   // Sample attendance data - in real app, this would come from API
   const [attendanceData] = useState({
@@ -264,13 +266,17 @@ const AttendanceScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      {/* Toggle Menu */}
-      <ToggleMenu navigation={navigation} />
-      
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>📊 Attendance History</Text>
-        <Text style={styles.headerSubtitle}>Track your daily presence</Text>
+        <View style={styles.headerTop}>
+          <View style={styles.headerContent}>
+            <Text style={styles.headerTitle}>📊 Attendance History</Text>
+            <Text style={styles.headerSubtitle}>Track your daily presence</Text>
+          </View>
+          <View style={styles.settingsButton}>
+            <Text style={styles.settingsIcon}>📊</Text>
+          </View>
+        </View>
       </View>
 
       {/* View Mode Toggle */}
@@ -428,6 +434,8 @@ const AttendanceScreen = ({ navigation }) => {
       </ScrollView>
 
       {renderDetailModal()}
+
+
     </View>
   );
 };
@@ -449,6 +457,32 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 10,
     elevation: 5,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  headerContent: {
+    flex: 1,
+  },
+  settingsButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  settingsIcon: {
+    fontSize: 18,
+    color: '#1E293B',
+    fontWeight: '600',
   },
   headerTitle: {
     fontSize: 24,

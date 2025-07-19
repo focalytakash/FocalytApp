@@ -9,7 +9,7 @@ export const requestLocationPermission = async () => {
         PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
         {
           title: 'Location Permission',
-          message: 'FocalytApp needs access to your location for accurate attendance tracking.',
+          message: 'Focalyt needs access to your location for accurate attendance tracking.',
           buttonNeutral: 'Ask Me Later',
           buttonNegative: 'Cancel',
           buttonPositive: 'OK',

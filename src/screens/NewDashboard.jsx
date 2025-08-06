@@ -21,6 +21,50 @@ import { ENV } from '../config/env';
 import enhancedAttendanceService from '../utils/enhancedAttendanceService';
 import modernLocationTracker from '../utils/modernLocationTracker';
 
+import notifee from '@notifee/react-native';
+import BackgroundService  from 'react-native-background-actions';
+
+const sleep = (time) => new Promise((resolve) => setTimeout(() => resolve(), time));
+const veryIntensiveTask = async (taskDataArguments) => {
+  console.log('veryIntensiveTask');
+  // Example of an infinite loop task
+  const { delay } = taskDataArguments;
+
+  await notifee.createChannel({
+    id: 'default',
+    name: 'Default Channel',
+  });
+
+  await new Promise(async (resolve) => {
+    for (let i = 0; BackgroundService .isRunning(); i++) {
+      console.log(i);
+      await notifee.displayNotification({
+        title: 'Background Task',
+        android: {
+          channelId: 'default',
+          smallIcon: 'ic_launcher', // Ensure you have this icon in your resources
+        },
+      });
+      await sleep(delay);
+    }
+  });
+};
+
+const options = {
+  taskName: 'Example',
+  taskTitle: 'ExampleTask title',
+  taskDesc: 'ExampleTask description',
+  taskIcon: {
+    name: 'ic_launcher',
+    type: 'mipmap',
+  },
+  color: '#ff00ff',
+  linkingURI: 'com.focalytapp', // See Deep Linking for more info
+  parameters: {
+    delay: 50000,
+  },
+};
+
 const { width } = Dimensions.get('window');
 
 const NewDashboard = () => {
@@ -52,17 +96,43 @@ const NewDashboard = () => {
     console.log('🔍 Geolocation type:', typeof Geolocation);
     console.log('🔍 getCurrentPosition available:', typeof Geolocation?.getCurrentPosition);
   }, []);
+  
+  // useEffect(() => {
+  //   const attendanceData = AsyncStorage.getItem('attendanceData');
+  //   if (attendanceData.length > 0) {
+  //     const todayData = attendanceData.find(item => item.date === new Date().toISOString().split('T')[0]);
+  //     if (todayData) {
+  //       setIsCheckedIn(true);
+  //       setCheckInTime(new Date(todayData.checkInTime));
+  //       setCheckOutTime(todayData.checkOutTime ? new Date(todayData.checkOutTime) : null);
+  //       setWorkingHours(todayData.workingHours);
+  //     }
+  //   }
+  // }, []);
+
   useEffect(() => {
-    const attendanceData = AsyncStorage.getItem('attendanceData');
-    if (attendanceData.length > 0) {
-      const todayData = attendanceData.find(item => item.date === new Date().toISOString().split('T')[0]);
-      if (todayData) {
-        setIsCheckedIn(true);
-        setCheckInTime(new Date(todayData.checkInTime));
-        setCheckOutTime(todayData.checkOutTime ? new Date(todayData.checkOutTime) : null);
-        setWorkingHours(todayData.workingHours);
+    const loadAttendanceData = async () => {
+      try {
+        const attendanceData = await AsyncStorage.getItem('attendanceData');
+        if (attendanceData) {
+          const parsedData = JSON.parse(attendanceData);
+          if (parsedData.length > 0) {
+            const todayData = parsedData.find(item => item.date === new Date().toISOString().split('T')[0]);
+            if (todayData) {
+              console.log('📅 Found today\'s attendance data:', todayData);
+              setIsCheckedIn(true);
+              setCheckInTime(new Date(todayData.checkInTime));
+              setCheckOutTime(todayData.checkOutTime ? new Date(todayData.checkOutTime) : null);
+              setWorkingHours(todayData.workingHours);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('❌ Error loading attendance data:', error);
       }
-    }
+    };
+    
+    loadAttendanceData();
   }, []);
 
   useEffect(() => {
@@ -374,6 +444,7 @@ const NewDashboard = () => {
 
   const getAddressFromCoordinates = async (latitude, longitude) => {
     try {
+      console.log('getAddressFromCoordinates');
       setAddressLoading(true);
 
       const response = await Geocoder.from(latitude, longitude);
@@ -453,6 +524,31 @@ const NewDashboard = () => {
       setAddressLoading(false);
     }
   };
+
+  const requestNotificationPermission = async () => {
+    if (Platform.OS === 'android') {
+      await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS
+      );
+    }
+    await notifee.requestPermission();
+  };
+
+  const startBackground = async () => {
+    if (!BackgroundService.isRunning()) {
+      await BackgroundService.start(veryIntensiveTask, options);
+    }
+  };
+
+  const stopBackground = async () => {
+    if (BackgroundService.isRunning()) {
+      await BackgroundService.stop();
+    }
+  };
+
+  useEffect(() => {
+    requestNotificationPermission();
+  }, []);
 
   // Enhanced Punch In logic with location tracking
   const handlePunchIn = async () => {
@@ -550,7 +646,7 @@ const NewDashboard = () => {
         }
       );
 
-     
+       await startBackground();
 
 
     } catch (error) {
@@ -578,12 +674,16 @@ const NewDashboard = () => {
   // Enhanced Punch Out logic with location tracking
   const handlePunchOut = async () => {
     if (loading) return;
-
+    console.log('handlePunchOut');
     setLoading(true);
+    setAddress(null);
+    setLocation(null);
+    setTodayAttendance(null);
 
     try {
       console.log('🏁 Starting enhanced punch out...');
 
+      console.log('stopBackground');
       // Use enhanced attendance service
       const result = await enhancedAttendanceService.punchOut();
 
@@ -637,6 +737,7 @@ const NewDashboard = () => {
             [{ text: 'Excellent!' }]
           );
         }
+        await stopBackground();
 
         console.log('🎉 Enhanced punch out completed successfully!');
       }
@@ -801,9 +902,7 @@ const NewDashboard = () => {
                 <Text style={styles.trackingStat}>
                   ⏱️ Duration: {workingHours}
                 </Text>
-                <Text style={styles.trackingStat}>
-                  🔋 Battery Optimized: {modernLocationTracker.getTrackingStatus().batteryOptimized ? 'Yes' : 'No'}
-                </Text>
+           
               </View>
             )}
           </View>
@@ -904,7 +1003,15 @@ const NewDashboard = () => {
               backgroundColor: isCheckedIn ? '#EF4444' : '#10B981',
               opacity: loading ? 0.6 : 1,
             }]}
-            onPress={isCheckedIn ? handlePunchOut : handlePunchIn}
+            // onPress={isCheckedIn ? handlePunchOut : handlePunchIn}
+            onPress={() => {
+              console.log('🔍 Button pressed, isCheckedIn:', isCheckedIn);
+              if (isCheckedIn) {
+                handlePunchOut();
+              } else {
+                handlePunchIn();
+              }
+            }}
             disabled={loading}
           >
             {loading ? (
@@ -930,7 +1037,7 @@ const NewDashboard = () => {
                 )}
               </View>
             )}
-          </TouchableOpacity>
+          </TouchableOpacity>         
         </View>
 
         {/* Footer */}
@@ -1459,5 +1566,3 @@ const styles = StyleSheet.create({
 });
 
 export default NewDashboard;
-
-

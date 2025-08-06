@@ -1,5 +1,5 @@
 export default {
-// isCurLoc: require('../assets/images/isCurLoc.png'),
+logo: require('../assets/images/logo/focalyt_new_logo.png'),
 // isGreenmarker : require('../assets/images/isGreenmarker.png'),
 
 }

@@ -85,3 +85,5 @@ yarn-error.log
 .env
 /src/config/env.js
 /android/app/src/main/res/values/strings.xml
+/src - Copy
+/android/app/src copy

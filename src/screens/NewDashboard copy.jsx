@@ -11,14 +11,47 @@ import {
   Platform,
   Image,
 } from 'react-native';
-import RNLocation from 'react-native-location';
+import Geolocation from '@react-native-community/geolocation';
 import { check, request, PERMISSIONS, RESULTS, openSettings } from 'react-native-permissions';
 import { launchCamera } from 'react-native-image-picker';
 import Geocoder from 'react-native-geocoding';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Config from 'react-native-config';
-import { ENV } from '../config/env';  
+import { ENV } from '../config/env';
+import enhancedAttendanceService from '../utils/enhancedAttendanceService';
+import modernLocationTracker from '../utils/modernLocationTracker';
+import BackgroundService from 'react-native-background-actions';
+import BackgroundService from 'react-native-background-actions';
 
+const sleep = (time) => new Promise((resolve) => setTimeout(() => resolve(), time));
+const veryIntensiveTask = async (taskDataArguments) => {
+  // Example of an infinite loop task
+  const { delay } = taskDataArguments;
+  await new Promise(async (resolve) => {
+    for (let i = 0; BackgroundService.isRunning(); i++) {
+      console.log(i);
+     
+      await BackgroundService.updateNotification({ taskDesc: 'location detector' + i});
+
+      await sleep(delay);
+    }
+  });
+};
+
+const options = {
+  taskName: 'Example',
+  taskTitle: 'ExampleTask title',
+  taskDesc: 'ExampleTask description',
+  taskIcon: {
+    name: 'ic_launcher',
+    type: 'mipmap',
+  },
+  color: '#ff00ff',
+  linkingURI: 'yourSchemeHere://chat/jane', // See Deep Linking for more info
+  parameters: {
+    delay: 1000,
+  },
+};
 const { width } = Dimensions.get('window');
 
 const NewDashboard = () => {
@@ -32,29 +65,50 @@ const NewDashboard = () => {
   const [location, setLocation] = useState(null);
   const [address, setAddress] = useState(null);
   const [addressLoading, setAddressLoading] = useState(false);
-  
+  const [isLoading, setIsLoading] = useState(false);
+
   // Camera related states
-  const [lastPhoto, setLastPhoto] = useState(null);
+  const [todayAttendance, setTodayAttendance] = useState(null);
   const [cameraPermission, setCameraPermission] = useState(false);
   const [locationPermission, setLocationPermission] = useState(false);
+  const [currentLocation, setCurrentLocation] = useState(null);
+
+  // Timeline tracking states
+  const [isTrackingActive, setIsTrackingActive] = useState(false);
+  const [trackingStartLocation, setTrackingStartLocation] = useState(null);
+
 
   useEffect(() => {
-    // Initialize location and geocoder
-    RNLocation.configure({
-      distanceFilter: 0,
-      desiredAccuracy: {
-        ios: 'bestForNavigation',
-        android: 'highAccuracy',
-      },
-      interval: 500,
-      fastestInterval: 250,
-      maxWaitTime: 5000,
-      enableBackgroundLocationUpdates: false,
-    });
-    Geocoder.init(ENV.GOOGLE_MAPS_API_KEY);
-    
+    console.log('🔍 Geolocation object:', Geolocation);
+    console.log('🔍 Geolocation type:', typeof Geolocation);
+    console.log('🔍 getCurrentPosition available:', typeof Geolocation?.getCurrentPosition);
+  }, []);
+  useEffect(() => {
+    const attendanceData = AsyncStorage.getItem('attendanceData');
+    if (attendanceData.length > 0) {
+      const todayData = attendanceData.find(item => item.date === new Date().toISOString().split('T')[0]);
+      if (todayData) {
+        setIsCheckedIn(true);
+        setCheckInTime(new Date(todayData.checkInTime));
+        setCheckOutTime(todayData.checkOutTime ? new Date(todayData.checkOutTime) : null);
+        setWorkingHours(todayData.workingHours);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    // Initialize geocoder only (remove RNLocation.configure to avoid conflicts)
+    try {
+      Geocoder.init(ENV.GOOGLE_MAPS_API_KEY);
+      console.log('✅ Geocoder initialized successfully');
+    } catch (error) {
+      console.error('❌ Geocoder initialization error:', error);
+    }
+
+    // Initialize enhanced services
+    initializeServices();
+
     // Check permissions on startup
-    checkAllPermissions();
   }, []);
 
   useEffect(() => {
@@ -62,7 +116,10 @@ const NewDashboard = () => {
       try {
         const userData = await AsyncStorage.getItem('user');
         if (userData !== null) {
-          setUserInfo(JSON.parse(userData));
+          const user = JSON.parse(userData);
+          setUserInfo(user);
+          // Initialize enhanced attendance service with user data
+          await enhancedAttendanceService.initializeUser(user);
         }
       } catch (error) {
         console.log('Error getting user info:', error);
@@ -92,403 +149,563 @@ const NewDashboard = () => {
     }
   }, [checkInTime, checkOutTime]);
 
-  // Check all permissions
-  const checkAllPermissions = async () => {
-    try {
-      // Check camera permission
-      const cameraPermissionStatus = await check(
-        Platform.OS === 'ios' ? PERMISSIONS.IOS.CAMERA : PERMISSIONS.ANDROID.CAMERA
-      );
-      setCameraPermission(cameraPermissionStatus === RESULTS.GRANTED);
+  // start tracking location 
 
-      // Check location permission
-      const locationPermissionStatus = await check(
-        Platform.OS === 'ios' 
-          ? PERMISSIONS.IOS.LOCATION_WHEN_IN_USE 
-          : PERMISSIONS.ANDROID.ACCESS_FINE_LOCATION
-      );
-      setLocationPermission(locationPermissionStatus === RESULTS.GRANTED);
-      
-      console.log('📱 Permission Status:', {
-        camera: cameraPermissionStatus === RESULTS.GRANTED,
-        location: locationPermissionStatus === RESULTS.GRANTED
-      });
+  const startBackgroundService = async () => {
+    console.log("startBackgroundService");
+ 
+      await BackgroundService.start(veryIntensiveTask, options);
+      await BackgroundService.updateNotification({ taskDesc: 'location detector' });
+   console.log("startBackgroundService done");
+  };
+
+  const stopBackgroundService = async () => {
+   
+      await BackgroundService.stop();
+   
+  };
+
+  // Initialize enhanced services
+  const initializeServices = async () => {
+    try {
+      console.log('🔧 Initializing enhanced services...');
+
+      // Process any offline data
+      await enhancedAttendanceService.processOfflineAttendanceData();
+
+      console.log('✅ Enhanced services initialized');
     } catch (error) {
-      console.error('❌ Permission check failed:', error);
+      console.error('❌ Error initializing services:', error);
     }
   };
 
-  // Request camera permission
+
   const requestCameraPermission = async () => {
     try {
-      const permission = Platform.OS === 'ios' ? PERMISSIONS.IOS.CAMERA : PERMISSIONS.ANDROID.CAMERA;
-      const result = await request(permission);
-      
-      if (result === RESULTS.GRANTED) {
-        setCameraPermission(true);
-        return true;
-      } else {
+      const result = await request(
+        Platform.OS === 'ios' ? PERMISSIONS.IOS.CAMERA : PERMISSIONS.ANDROID.CAMERA
+      );
+      setCameraPermission(result === RESULTS.GRANTED);
+
+      if (result !== RESULTS.GRANTED) {
         Alert.alert(
           '📸 Camera Permission Required',
-          'Camera permission is required to take attendance photos. Please enable it in settings.',
+          'Please enable camera access in settings to take attendance photos.',
           [
             { text: 'Cancel', style: 'cancel' },
-            { text: 'Open Settings', onPress: () => openSettings() },
+            { text: 'Open Settings', onPress: openSettings }
           ]
         );
-        return false;
       }
+
+      return result === RESULTS.GRANTED;
     } catch (error) {
-      console.error('❌ Camera permission request failed:', error);
+      console.error('❌ Error requesting camera permission:', error);
       return false;
     }
   };
 
-  // Request location permission
+  const handleBlockedPermission = async (permission) => {
+    Alert.alert(
+      `🚫 ${permission} Permission Blocked`,
+      `${permission} permission is permanently denied. To enable ${permission} features:\n\n1. Go to Settings\n2. Find this app\n3. Enable ${permission} permission\n4. Return to app`,
+      [
+        {
+          text: `Continue Without ${permission}`,
+          style: 'cancel',
+          onPress: () => {
+            console.log(`User chose to continue without ${permission}`);
+          }
+        },
+        {
+          text: 'Open Settings',
+          onPress: () => {
+            openSettings().catch(() => {
+              Alert.alert('Error', 'Could not open settings');
+            });
+          }
+        }
+      ]
+    );
+  };
+
   const requestLocationPermission = async () => {
     try {
-      const permission = Platform.OS === 'ios'
-        ? PERMISSIONS.IOS.LOCATION_WHEN_IN_USE
-        : PERMISSIONS.ANDROID.ACCESS_FINE_LOCATION;
-      const result = await request(permission);
-      
-      if (result === RESULTS.GRANTED || result === RESULTS.LIMITED) {
-        setLocationPermission(true);
-        return true;
-      } else {
+      console.log('📍 Requesting location permission...');
+
+      // First try with react-native-permissions
+      const result = await request(
+        Platform.OS === 'ios' ? PERMISSIONS.IOS.LOCATION_WHEN_IN_USE : PERMISSIONS.ANDROID.ACCESS_FINE_LOCATION
+      );
+
+      console.log('📍 Permission result:', result);
+      setLocationPermission(result === RESULTS.GRANTED);
+
+      if (result !== RESULTS.GRANTED) {
         Alert.alert(
           '📍 Location Permission Required',
-          'Location permission is required for attendance tracking. Please enable it in settings.',
+          'Please enable location access in settings for attendance tracking.',
           [
             { text: 'Cancel', style: 'cancel' },
-            { text: 'Open Settings', onPress: () => openSettings() },
+            { text: 'Open Settings', onPress: openSettings }
           ]
         );
         return false;
       }
+
+      // Also request permission with react-native-location
+      try {
+        const rnLocationPermission = await RNLocation.requestPermission({
+          ios: 'whenInUse',
+          android: {
+            detail: 'fine',
+          },
+        });
+        console.log('📍 RNLocation permission:', rnLocationPermission);
+      } catch (rnError) {
+        console.log('📍 RNLocation permission error (non-critical):', rnError);
+      }
+
+      return true;
     } catch (error) {
-      console.error('❌ Location permission request failed:', error);
+      console.error('❌ Error requesting location permission:', error);
       return false;
     }
   };
 
-  // Capture photo using camera
   const capturePhoto = async () => {
     try {
-      console.log('📸 Opening camera for photo capture...');
-      
       const options = {
         mediaType: 'photo',
         quality: 0.8,
-        maxWidth: 1024,
-        maxHeight: 1024,
         includeBase64: false,
         saveToPhotos: false,
-        cameraType: 'front', // Use front camera for selfie
       };
 
-      return new Promise((resolve) => {
-        launchCamera(options, (response) => {
-          if (response.didCancel) {
-            console.log('📸 User cancelled camera');
-            resolve(null);
-          } else if (response.errorMessage) {
-            console.error('📸 Camera error:', response.errorMessage);
-            Alert.alert('Camera Error', response.errorMessage);
-            resolve(null);
-          } else if (response.assets && response.assets[0]) {
-            const photo = {
-              uri: response.assets[0].uri,
-              type: response.assets[0].type,
-              fileName: response.assets[0].fileName || 'attendance_photo.jpg',
-              fileSize: response.assets[0].fileSize,
-              width: response.assets[0].width,
-              height: response.assets[0].height,
-              timestamp: new Date().toISOString(),
-            };
-            console.log('📸 Photo captured successfully:', photo);
-            resolve(photo);
-          } else {
-            resolve(null);
-          }
-        });
-      });
+      const result = await launchCamera(options);
+
+      if (result.didCancel) {
+        console.log('📸 User cancelled photo capture');
+        return null;
+      }
+
+      if (result.errorCode) {
+        console.error('📸 Camera error:', result.errorMessage);
+        return null;
+      }
+
+      if (result.assets && result.assets[0]) {
+        const photoData = {
+          uri: result.assets[0].uri,
+          fileName: result.assets[0].fileName || `attendance_${Date.now()}.jpg`,
+          fileSize: result.assets[0].fileSize || 0,
+          timestamp: new Date().toISOString(),
+        };
+
+        console.log('📸 Photo captured:', photoData);
+        return photoData;
+      }
+
+      return null;
     } catch (error) {
-      console.error('❌ Photo capture failed:', error);
-      Alert.alert('Error', 'Failed to capture photo. Please try again.');
+      console.error('❌ Error capturing photo:', error);
       return null;
     }
   };
 
-  // Get single location reading
   const getLocationReading = async () => {
     try {
       console.log('📍 Getting location...');
-      const location = await RNLocation.getLatestLocation({
-        timeout: 15000,
-        enableHighAccuracy: true,
-        maximumAge: 30000,
-      });
-      
-      if (location && location.latitude && location.longitude) {
-        console.log('📍 Location obtained:', location);
-        return {
-          latitude: location.latitude,
-          longitude: location.longitude,
-          accuracy: location.accuracy || 1000,
-          timestamp: location.timestamp || Date.now(),
-        };
+
+      // Check if we have permission first
+      if (!locationPermission) {
+        console.log('📍 No location permission, requesting...');
+        const hasPermission = await requestLocationPermission();
+        if (!hasPermission) {
+          return null;
+        }
       }
+
+      // Try to get location with multiple attempts
+      let location = null;
+      let attempts = 0;
+      const maxAttempts = 3;
+
+      while (!location && attempts < maxAttempts) {
+        attempts++;
+        console.log(`📍 Attempt ${attempts} to get location...`);
+
+        try {
+          // Method 1: Try with RNLocation
+          location = await RNLocation.getLatestLocation({
+            timeout: 15000,
+            enableHighAccuracy: true,
+            maximumAge: 30000,
+          });
+
+          if (location && location.latitude && location.longitude) {
+            console.log('📍 Location obtained via RNLocation:', {
+              latitude: location.latitude,
+              longitude: location.longitude,
+              accuracy: location.accuracy,
+            });
+            return {
+              latitude: location.latitude,
+              longitude: location.longitude,
+              accuracy: location.accuracy || 1000,
+              timestamp: new Date().toISOString(),
+            };
+          } else {
+            console.log('📍 RNLocation returned invalid location:', location);
+          }
+
+          // Method 2: Try with different settings if first attempt failed
+          if (attempts === 2) {
+            console.log('📍 Trying with different location settings...');
+            location = await RNLocation.getLatestLocation({
+              timeout: 20000,
+              enableHighAccuracy: false,
+              maximumAge: 60000,
+            });
+
+            if (location && location.latitude && location.longitude) {
+              console.log('📍 Location obtained with fallback settings:', {
+                latitude: location.latitude,
+                longitude: location.longitude,
+                accuracy: location.accuracy,
+              });
+              return {
+                latitude: location.latitude,
+                longitude: location.longitude,
+                accuracy: location.accuracy || 1000,
+                timestamp: new Date().toISOString(),
+              };
+            }
+          }
+
+        } catch (attemptError) {
+          console.log(`📍 Attempt ${attempts} failed:`, attemptError.message);
+          if (attempts < maxAttempts) {
+            // Wait a bit before next attempt
+            await new Promise(resolve => setTimeout(resolve, 3000));
+          }
+        }
+      }
+
+      if (!location) {
+        console.log('📍 All location attempts failed');
+        Alert.alert(
+          '📍 Location Error',
+          'Could not get your location. Please check:\n\n• GPS is enabled\n• Location permission is granted\n• You are outdoors or near a window\n\nTry again?',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Try Again', onPress: () => handlePunchIn() }
+          ]
+        );
+      }
+
       return null;
     } catch (error) {
-      console.error('❌ Location error:', error);
+      console.error('❌ Error getting location:', error);
+      Alert.alert(
+        '📍 Location Error',
+        'Failed to get location. Please check your GPS settings and try again.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Try Again', onPress: () => handlePunchIn() }
+        ]
+      );
       return null;
     }
   };
 
-  // Get address from coordinates
   const getAddressFromCoordinates = async (latitude, longitude) => {
     try {
       setAddressLoading(true);
-      console.log('🏠 Getting address for coordinates...');
-      
+
       const response = await Geocoder.from(latitude, longitude);
-      if (response && response.results && response.results.length > 0) {
+
+      if (response.results && response.results.length > 0) {
         const result = response.results[0];
         const addressComponents = result.address_components;
-        
-        const address = {
-          formattedAddress: result.formatted_address,
-          streetNumber: '',
-          route: '',
-          locality: '',
-          administrativeArea: '',
-          postalCode: '',
-          country: '',
-          placeId: result.place_id,
-          types: result.types,
-        };
-        
+
+        let streetNumber = '';
+        let route = '';
+        let sublocality = '';
+        let locality = '';
+        let administrativeArea = '';
+        let country = '';
+        let postalCode = '';
+
         addressComponents.forEach(component => {
           const types = component.types;
-          if (types.includes('street_number')) address.streetNumber = component.long_name;
-          else if (types.includes('route')) address.route = component.long_name;
-          else if (types.includes('locality')) address.locality = component.long_name;
-          else if (types.includes('administrative_area_level_1')) address.administrativeArea = component.long_name;
-          else if (types.includes('postal_code')) address.postalCode = component.long_name;
-          else if (types.includes('country')) address.country = component.long_name;
+          if (types.includes('street_number')) {
+            streetNumber = component.long_name;
+          } else if (types.includes('route')) {
+            route = component.long_name;
+          } else if (types.includes('sublocality')) {
+            sublocality = component.long_name;
+          } else if (types.includes('locality')) {
+            locality = component.long_name;
+          } else if (types.includes('administrative_area_level_1')) {
+            administrativeArea = component.long_name;
+          } else if (types.includes('country')) {
+            country = component.long_name;
+          } else if (types.includes('postal_code')) {
+            postalCode = component.long_name;
+          }
         });
-        
-        const cleanAddress = [
-          address.streetNumber && address.route ? `${address.streetNumber} ${address.route}` : address.route,
-          address.locality,
-          address.administrativeArea,
-          address.postalCode,
-          address.country,
-        ].filter(Boolean).join(', ');
-        
-        address.cleanAddress = cleanAddress;
-        console.log('🏠 Address obtained:', address);
-        return address;
+
+        const cleanAddress = result.formatted_address;
+        const shortAddress = [streetNumber, route, sublocality, locality]
+          .filter(Boolean)
+          .join(', ');
+
+        const addressData = {
+          formattedAddress: result.formatted_address,
+          cleanAddress: cleanAddress,
+          shortAddress: shortAddress || cleanAddress,
+          streetNumber,
+          route,
+          sublocality,
+          locality,
+          administrativeArea,
+          country,
+          postalCode,
+          latitude,
+          longitude,
+        };
+
+        console.log('🏠 Address resolved:', addressData);
+        return addressData;
       }
-      throw new Error('No address found');
-    } catch (error) {
-      console.error('❌ Address error:', error);
+
       return {
-        formattedAddress: 'Address not available',
-        cleanAddress: 'Address not available',
-        error: error.message,
+        formattedAddress: `${latitude}, ${longitude}`,
+        cleanAddress: `${latitude}, ${longitude}`,
+        shortAddress: `${latitude}, ${longitude}`,
+        latitude,
+        longitude,
+      };
+    } catch (error) {
+      console.error('❌ Error getting address:', error);
+      return {
+        formattedAddress: `${latitude}, ${longitude}`,
+        cleanAddress: `${latitude}, ${longitude}`,
+        shortAddress: `${latitude}, ${longitude}`,
+        latitude,
+        longitude,
       };
     } finally {
       setAddressLoading(false);
     }
   };
 
-  // Enhanced Punch In logic with camera
+  // Enhanced Punch In logic with location tracking
   const handlePunchIn = async () => {
+    console.log('🚀 Starting enhanced punch in...');
     if (loading) return;
-    
+
     setLoading(true);
     setAddress(null);
     setLocation(null);
-    setLastPhoto(null);
-    
+    setTodayAttendance(null);
+
     try {
-      console.log('🚀 Starting punch in process with camera...');
-      
-      // Step 1: Check and request camera permission
-      let hasCameraPermission = cameraPermission;
-      if (!hasCameraPermission) {
-        console.log('📸 Requesting camera permission...');
-        hasCameraPermission = await requestCameraPermission();
-        if (!hasCameraPermission) {
-          setLoading(false);
-          return;
+      console.log('🚀 Starting enhanced punch in...');
+      const cameraPermission = await check(PERMISSIONS.ANDROID.CAMERA);
+      console.log('🔍 Camera permission:', cameraPermission);
+      switch (cameraPermission) {
+        case RESULTS.GRANTED:
+          console.log('🔍 Camera permission granted');
+          break;
+        case RESULTS.DENIED:
+          console.log('🔍 Camera permission denied');
+          await requestCameraPermission();
+          break;
+        case RESULTS.BLOCKED:
+          console.log('🔍 Camera permission blocked');
+          await handleBlockedPermission('Camera');
+          break;
+        default:
+
+      }
+
+      const checkLocationPermission = await check(PERMISSIONS.ANDROID.ACCESS_FINE_LOCATION);
+      console.log('🔍 Location permission:', checkLocationPermission);
+      switch (checkLocationPermission) {
+        case RESULTS.GRANTED:
+          console.log('🔍 Location permission granted');
+          break;
+        case RESULTS.DENIED:
+          console.log('🔍 Location permission denied');
+          await requestLocationPermission();
+          break;
+        case RESULTS.BLOCKED:
+          console.log('🔍 Location permission blocked');
+          await handleBlockedPermission('Location');
+          break;
+      }
+
+      const checkLocationPermissionCoarse = await check(PERMISSIONS.ANDROID.ACCESS_COARSE_LOCATION);
+      console.log('🔍 Location permission coarse:', checkLocationPermissionCoarse);
+      switch (checkLocationPermissionCoarse) {
+        case RESULTS.GRANTED:
+          console.log('🔍 Location permission coarse granted');
+          break;
+        case RESULTS.DENIED:
+          console.log('🔍 Location permission coarse denied');
+          await request(PERMISSIONS.ANDROID.ACCESS_COARSE_LOCATION);
+          break;
+        case RESULTS.BLOCKED:
+          console.log('🔍 Location permission coarse blocked');
+          await handleBlockedPermission('Location');
+          break;
+      }
+
+      const backgroundLocationPermission = await check(PERMISSIONS.ANDROID.ACCESS_BACKGROUND_LOCATION);
+      console.log('🔍 Background location permission:', backgroundLocationPermission);
+      switch (backgroundLocationPermission) {
+        case RESULTS.GRANTED:
+          console.log('🔍 Background location permission granted');
+          break;
+        case RESULTS.DENIED:
+          console.log('🔍 Background location permission denied');
+          await request(PERMISSIONS.ANDROID.ACCESS_BACKGROUND_LOCATION);
+          break;
+        case RESULTS.BLOCKED:
+          console.log('🔍 Background location permission blocked');
+          await handleBlockedPermission('Background Location');
+          break;
+      }
+
+      const openCapturePhoto = await capturePhoto();
+      await startBackgroundService();
+
+      // Get location
+      Geolocation.getCurrentPosition(
+        (position) => {
+          console.log('📍 Position:', position);
+        },
+        (error) => {
+          console.error('❌ Location error:', error);
+        },
+        {
+          enableHighAccuracy: true, // Enable high accuracy
+          timeout: 20000, // Timeout after 20 seconds
+          maximumAge: 1000, // Cache location for 1 second
         }
-      }
-      
-      // Step 2: Check and request location permission
-      let hasLocationPermission = locationPermission;
-      if (!hasLocationPermission) {
-        console.log('📍 Requesting location permission...');
-        hasLocationPermission = await requestLocationPermission();
-        if (!hasLocationPermission) {
-          setLoading(false);
-          return;
-        }
-      }
-      
-      // Step 3: Capture photo first
-      console.log('📸 Capturing attendance photo...');
-      const photoData = await capturePhoto();
-      
-      if (!photoData) {
-        Alert.alert(
-          '📸 Photo Required', 
-          'Please take a photo for attendance verification.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Try Again', onPress: () => handlePunchIn() }
-          ]
-        );
-        setLoading(false);
-        return;
-      }
-      
-      setLastPhoto(photoData);
-      console.log('✅ Photo captured successfully');
-      
-      // Step 4: Get location
-      console.log('📍 Getting location...');
-      const loc = await getLocationReading();
-      
-      if (!loc) {
-        Alert.alert('📍 Location Error', 'Could not get your location. Please try again.');
-        setLoading(false);
-        return;
-      }
-      
-      setLocation(loc);
-      console.log('✅ Location obtained successfully');
-      
-      // Step 5: Get address
-      console.log('🏠 Getting address...');
-      const addr = await getAddressFromCoordinates(loc.latitude, loc.longitude);
-      setAddress(addr);
-      console.log('✅ Address obtained successfully');
-      
-      // Step 6: Complete punch in
-      setIsCheckedIn(true);
-      const punchInTime = new Date();
-      setCheckInTime(punchInTime);
-      
-      // Success message with all data
-      Alert.alert(
-        '🎉 Punch In Successful!', 
-        `⏰ Time: ${punchInTime.toLocaleTimeString()}\n` +
-        `📸 Photo: ✅ Captured\n` +
-        `📍 Location: ${loc.latitude.toFixed(6)}, ${loc.longitude.toFixed(6)}\n` +
-        `🏠 Address: ${addr.cleanAddress}`,
-        [{ text: 'Great!' }]
       );
-      
-      console.log('🎉 Punch in completed successfully!');
-      
+
+     
+
+
     } catch (error) {
-      console.error('❌ Punch in failed:', error);
-      Alert.alert('❌ Punch In Failed', 'Something went wrong. Please try again.');
+      console.error('❌ Enhanced punch in failed:', error);
+
+      let errorMessage = 'Something went wrong. Please try again.';
+
+      if (error.message.includes('permission')) {
+        errorMessage = 'Camera and location permissions are required for attendance.';
+      } else if (error.message.includes('location')) {
+        errorMessage = 'Could not get your location. Please check GPS settings.';
+      } else if (error.message.includes('photo')) {
+        errorMessage = 'Photo capture is required for attendance verification.';
+      }
+
+      Alert.alert('❌ Punch In Failed', errorMessage, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Try Again', onPress: () => handlePunchIn() }
+      ]);
     } finally {
       setLoading(false);
     }
   };
 
-  // Enhanced Punch Out logic with camera
+  // Enhanced Punch Out logic with location tracking
   const handlePunchOut = async () => {
     if (loading) return;
-    
+
     setLoading(true);
-    
+
     try {
-      console.log('🏁 Starting punch out process with camera...');
-      
-      // Step 1: Check permissions
-      let hasCameraPermission = cameraPermission;
-      if (!hasCameraPermission) {
-        hasCameraPermission = await requestCameraPermission();
-        if (!hasCameraPermission) {
-          setLoading(false);
-          return;
+      console.log('🏁 Starting enhanced punch out...');
+
+      // Use enhanced attendance service
+      const result = await enhancedAttendanceService.punchOut();
+
+      if (result.success) {
+        // Update UI state
+        setIsCheckedIn(false);
+        const punchOutTime = new Date();
+        setCheckOutTime(punchOutTime);
+        setWorkingHours('00:00:00');
+
+        // Set photo and location data for display
+        if (result.record.photo) {
+          setTodayAttendance(result.record.photo);
         }
-      }
-      
-      let hasLocationPermission = locationPermission;
-      if (!hasLocationPermission) {
-        hasLocationPermission = await requestLocationPermission();
-        if (!hasLocationPermission) {
-          setLoading(false);
-          return;
+        if (result.record.location) {
+          setLocation(result.record.location);
+          // Get address for display
+          const addr = await getAddressFromCoordinates(
+            result.record.location.latitude,
+            result.record.location.longitude
+          );
+          setAddress(addr);
         }
+
+        // Stop timeline tracking
+        setIsTrackingActive(false);
+        setTrackingStartLocation(null);
+        await stopBackgroundService();
+
+        // Calculate total working time
+        if (checkInTime) {
+          const totalTime = punchOutTime - checkInTime;
+          const hours = Math.floor(totalTime / (1000 * 60 * 60));
+          const minutes = Math.floor((totalTime % (1000 * 60 * 60)) / (1000 * 60));
+
+          // Get session statistics
+          const sessionStats = result.sessionStats;
+          const totalDistance = sessionStats ? (sessionStats.totalDistance / 1000).toFixed(2) : 'N/A';
+          const locationCount = sessionStats ? sessionStats.locationCount : 'N/A';
+
+          Alert.alert(
+            '🎉 Enhanced Punch Out Successful!',
+            `⏰ Time: ${punchOutTime.toLocaleTimeString()}\n` +
+            `⏱️ Total Time: ${hours}h ${minutes}m\n` +
+            `📸 Photo: ✅ Captured\n` +
+            `📍 Location: ✅ Verified\n` +
+            `🗺️ Tracking stopped\n` +
+            `📊 Session Stats:\n` +
+            `   • Locations tracked: ${locationCount}\n` +
+            `   • Distance traveled: ${totalDistance}km\n` +
+            `   • Session ID: ${sessionStats?.sessionId || 'N/A'}`,
+            [{ text: 'Excellent!' }]
+          );
+        }
+
+        console.log('🎉 Enhanced punch out completed successfully!');
       }
-      
-      // Step 2: Capture photo
-      console.log('📸 Capturing punch out photo...');
-      const photoData = await capturePhoto();
-      
-      if (!photoData) {
-        Alert.alert(
-          '📸 Photo Required', 
-          'Please take a photo for punch out verification.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Try Again', onPress: () => handlePunchOut() }
-          ]
-        );
-        setLoading(false);
-        return;
-      }
-      
-      setLastPhoto(photoData);
-      
-      // Step 3: Get location
-      const loc = await getLocationReading();
-      if (!loc) {
-        Alert.alert('📍 Location Error', 'Could not get your location. Please try again.');
-        setLoading(false);
-        return;
-      }
-      
-      setLocation(loc);
-      
-      // Step 4: Get address
-      const addr = await getAddressFromCoordinates(loc.latitude, loc.longitude);
-      setAddress(addr);
-      
-      // Step 5: Complete punch out
-      setIsCheckedIn(false);
-      const punchOutTime = new Date();
-      setCheckOutTime(punchOutTime);
-      setWorkingHours('00:00:00');
-      
-      // Calculate total working time
-      if (checkInTime) {
-        const totalTime = punchOutTime - checkInTime;
-        const hours = Math.floor(totalTime / (1000 * 60 * 60));
-        const minutes = Math.floor((totalTime % (1000 * 60 * 60)) / (1000 * 60));
-        
-        Alert.alert(
-          '🎉 Punch Out Successful!',
-          `⏰ Time: ${punchOutTime.toLocaleTimeString()}\n` +
-          `⏱️ Total Time: ${hours}h ${minutes}m\n` +
-          `📸 Photo: ✅ Captured\n` +
-          `📍 Location: ${loc.latitude.toFixed(6)}, ${loc.longitude.toFixed(6)}\n` +
-          `🏠 Address: ${addr.cleanAddress}`,
-          [{ text: 'Excellent!' }]
-        );
-      }
-      
+
     } catch (error) {
-      console.error('❌ Punch out failed:', error);
-      Alert.alert('❌ Punch Out Failed', 'Something went wrong. Please try again.');
+      console.error('❌ Enhanced punch out failed:', error);
+
+      let errorMessage = 'Something went wrong. Please try again.';
+
+      if (error.message.includes('permission')) {
+        errorMessage = 'Camera and location permissions are required for attendance.';
+      } else if (error.message.includes('location')) {
+        errorMessage = 'Could not get your location. Please check GPS settings.';
+      } else if (error.message.includes('photo')) {
+        errorMessage = 'Photo capture is required for attendance verification.';
+      }
+
+      Alert.alert('❌ Punch Out Failed', errorMessage, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Try Again', onPress: () => handlePunchOut() }
+      ]);
     } finally {
       setLoading(false);
     }
@@ -577,7 +794,7 @@ const NewDashboard = () => {
         <View style={styles.statusCard}>
           <View style={styles.statusContent}>
             <View style={styles.statusLeft}>
-              <View style={[styles.statusIndicator, { backgroundColor: isCheckedIn ? '#10B981' : '#EF4444' }]}> 
+              <View style={[styles.statusIndicator, { backgroundColor: isCheckedIn ? '#10B981' : '#EF4444' }]}>
                 <Text style={styles.statusIcon}>{isCheckedIn ? '🟢' : '🔴'}</Text>
               </View>
               <View>
@@ -609,56 +826,45 @@ const NewDashboard = () => {
           )}
         </View>
 
-        {/* Last Recorded Data Card */}
-        {(lastPhoto || location || address) && (
-          <View style={styles.dataCard}>
-            <Text style={styles.sectionTitle}>📊 Last Recorded Data</Text>
-            
-            {/* Last Photo */}
-            {lastPhoto && (
-              <View style={styles.dataItem}>
-                <Text style={styles.dataIcon}>📸</Text>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.dataLabel}>Last Photo:</Text>
-                  <Text style={styles.dataValue}>{new Date(lastPhoto.timestamp).toLocaleTimeString()}</Text>
-                  <View style={styles.photoContainer}>
-                    <Image source={{ uri: lastPhoto.uri }} style={styles.photoPreview} />
-                    <Text style={styles.photoInfo}>
-                      📐 {lastPhoto.width}x{lastPhoto.height} | 📦 {(lastPhoto.fileSize / 1024).toFixed(1)}KB
-                    </Text>
-                  </View>
-                </View>
-              </View>
-            )}
-            
-            <View style={styles.dataItem}>
-              <Text style={styles.dataIcon}>🕒</Text>
-              <Text style={styles.dataLabel}>Last Punch:</Text>
-              <Text style={styles.dataValue}>{checkInTime ? formatTime(checkInTime) : '--'}</Text>
+        {/* Enhanced Tracking Status Card */}
+        <View style={styles.trackingCard}>
+          <Text style={styles.sectionTitle}>🗺️ Live Tracking Status</Text>
+
+          {/* Tracking Status */}
+          <View style={styles.trackingStatus}>
+            <View style={styles.trackingIndicator}>
+              <Text style={styles.trackingIcon}>
+                {isTrackingActive ? '🟢' : '🔴'}
+              </Text>
+              <Text style={styles.trackingLabel}>
+                {isTrackingActive ? 'Active Tracking' : 'Tracking Stopped'}
+              </Text>
             </View>
-            
-            {location && (
-              <View style={styles.dataItem}>
-                <Text style={styles.dataIcon}>📍</Text>
-                <Text style={styles.dataLabel}>Coordinates:</Text>
-                <Text style={styles.dataValue}>
-                  {location.latitude.toFixed(6)}, {location.longitude.toFixed(6)} (±{location.accuracy ? location.accuracy.toFixed(1) : 'N/A'}m)
+
+            {isTrackingActive && (
+              <View style={styles.trackingStats}>
+                <Text style={styles.trackingStat}>
+                  📍 Locations: {modernLocationTracker.getTrackingStatus().currentSession?.locations?.length || 0}
+                </Text>
+                <Text style={styles.trackingStat}>
+                  ⏱️ Duration: {workingHours}
+                </Text>
+                <Text style={styles.trackingStat}>
+                  🔋 Battery Optimized: {modernLocationTracker.getTrackingStatus().batteryOptimized ? 'Yes' : 'No'}
                 </Text>
               </View>
             )}
-            
-            {address && (
-              <View style={styles.dataItem}>
-                <Text style={styles.dataIcon}>🏠</Text>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.dataLabel}>Address:</Text>
-                  <Text style={[styles.dataValue, { fontWeight: 'bold', marginBottom: 2 }]}>{address.cleanAddress}</Text>
-                  <Text style={{ color: '#8E8E93', fontSize: 12 }}>{address.formattedAddress}</Text>
-                </View>
-              </View>
-            )}
           </View>
-        )}
+
+          {/* Offline Data Status */}
+          <View style={styles.offlineStatus}>
+            <Text style={styles.offlineIcon}>💾</Text>
+            <Text style={styles.offlineLabel}>
+              Offline Data: {enhancedAttendanceService.getCurrentStatus().offlineDataCount || 0} records
+            </Text>
+          </View>
+        </View>
+
 
         {/* User Profile Card */}
         <View style={styles.profileCard}>
@@ -742,7 +948,7 @@ const NewDashboard = () => {
         {/* Enhanced Action Button */}
         <View style={styles.actionSection}>
           <TouchableOpacity
-            style={[styles.actionButton, { 
+            style={[styles.actionButton, {
               backgroundColor: isCheckedIn ? '#EF4444' : '#10B981',
               opacity: loading ? 0.6 : 1,
             }]}
@@ -981,6 +1187,63 @@ const styles = StyleSheet.create({
     color: '#64748B',
     textAlign: 'center',
     marginTop: 8,
+  },
+  trackingCard: {
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 20,
+    marginBottom: 20,
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 5,
+    borderLeftWidth: 4,
+    borderLeftColor: '#3B82F6',
+  },
+  trackingStatus: {
+    marginBottom: 16,
+  },
+  trackingIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  trackingIcon: {
+    fontSize: 20,
+    marginRight: 12,
+  },
+  trackingLabel: {
+    fontSize: 16,
+    color: '#1E293B',
+    fontWeight: '600',
+  },
+  trackingStats: {
+    backgroundColor: '#F1F5F9',
+    borderRadius: 12,
+    padding: 12,
+  },
+  trackingStat: {
+    fontSize: 14,
+    color: '#64748B',
+    marginBottom: 4,
+  },
+  offlineStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    borderRadius: 12,
+    padding: 12,
+  },
+  offlineIcon: {
+    fontSize: 16,
+    marginRight: 8,
+  },
+  offlineLabel: {
+    fontSize: 14,
+    color: '#92400E',
+    fontWeight: '500',
   },
   dataCard: {
     backgroundColor: '#FFFFFF',

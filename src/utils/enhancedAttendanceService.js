@@ -437,12 +437,33 @@ class EnhancedAttendanceService {
   // Get current attendance status
   getCurrentStatus() {
     const trackingStatus = modernLocationTracker.getTrackingStatus();
+    const currentSession = trackingStatus.currentSession;
+    
     return {
       isCheckedIn: trackingStatus.isTracking,
-      currentSession: trackingStatus.currentSession,
+      isTrackingActive: trackingStatus.isTracking,
+      currentSession: currentSession,
+      checkInTime: currentSession?.startTime,
+      checkOutTime: currentSession?.endTime,
+      workingHours: currentSession ? this.calculateWorkingHours(currentSession.startTime, currentSession.endTime) : '00:00:00',
       offlineDataCount: this.offlineAttendanceData.length,
       user: this.currentUser,
     };
+  }
+
+  // Calculate working hours
+  calculateWorkingHours(startTime, endTime) {
+    if (!startTime) return '00:00:00';
+    
+    const start = new Date(startTime);
+    const end = endTime ? new Date(endTime) : new Date();
+    const diff = end - start;
+    
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+    
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   }
 
   // Get attendance statistics

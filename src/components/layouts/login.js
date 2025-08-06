@@ -460,6 +460,7 @@ import {
     Alert,
 } from 'react-native';
 
+import ImagePath from '../../constants/ImagePath';
 
 
 const LoginScreen = ({ navigation }) => {
@@ -637,7 +638,7 @@ const LoginScreen = ({ navigation }) => {
             >
                 <View style={styles.logoContainer}>
                     <Image
-                        source={require('../../assets/images/logo/focalyt_new_logo.png')}
+                        source={ImagePath.logo}
                         style={styles.logo}
                     />
                     <Text style={styles.appName}>Focalyt</Text>

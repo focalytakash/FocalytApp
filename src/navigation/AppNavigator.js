@@ -3,7 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import LoginScreen from '../components/layouts/login';
 import BottomTabNavigator from './BottomTabNavigator';
-import EmployeeProfile from '../screens/EmployeeProfile';
+
 
 const Stack = createStackNavigator();
 
@@ -18,7 +18,6 @@ function AppNavigator() {
       >
         <Stack.Screen name="Login" component={LoginScreen} />
         <Stack.Screen name="MainApp" component={BottomTabNavigator} />
-        <Stack.Screen name="EmployeeProfile" component={EmployeeProfile} />
       </Stack.Navigator>
     </NavigationContainer>
   );
